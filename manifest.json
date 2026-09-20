@@ -1,0 +1,10 @@
+{
+  "name": "ボドゲ棚",
+  "short_name": "ボドゲ棚",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f4f2eb",
+  "theme_color": "#17221c",
+  "lang": "ja",
+  "description": "プレイ済みボードゲームを人数や名前から探せる自分専用の棚"
+}
