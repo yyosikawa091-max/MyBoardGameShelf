@@ -1,0 +1,2 @@
+# MyBoardGameShelf
+ボドゲをまとめるサイト
