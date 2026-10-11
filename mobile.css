@@ -28,7 +28,8 @@
   .form-actions .submit-button {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
+    gap: 8px;
   }
 
   .form-actions .submit-button span {
