@@ -73,6 +73,7 @@ const emptyState = document.querySelector('#emptyState');
 const heroCount = document.querySelector('#heroCount');
 const builtInCount = games.length;
 const overrides = JSON.parse(localStorage.getItem('boardGameOverrides') || '{}');
+const imageSearchCache = JSON.parse(localStorage.getItem('boardGameImageSearch') || '{}');
 games.forEach((game, index) => {
   if (overrides[index]) games[index] = overrides[index];
   if (!games[index][2]) games[index][2] = 'その他';
@@ -153,8 +154,162 @@ function remoteGameImage(game) {
   return `https://tse1.mm.bing.net/th?q=${query}&w=960&h=640&c=7&rs=1&p=0`;
 }
 
+function imageCacheKey(name) {
+  return String(name || '').trim().toLocaleLowerCase('ja');
+}
+
+function cachedGameImage(name) {
+  const cached = imageSearchCache[imageCacheKey(name)];
+  if (!cached || !Number.isFinite(Number(cached.searchedAt))
+    || Date.now() - Number(cached.searchedAt) >= 90 * 24 * 60 * 60 * 1000) return null;
+  const result = cached.result;
+  if (!result) return null;
+  const thumbnailUrl = safeCommonsUrl(result.thumbnailUrl, ['upload.wikimedia.org', 'thumb.wikimedia.org']);
+  const descriptionUrl = safeCommonsUrl(result.descriptionUrl, ['commons.wikimedia.org']);
+  return thumbnailUrl && descriptionUrl ? { ...result, thumbnailUrl, descriptionUrl } : null;
+}
+
 function gameImage(game) {
-  return game[5] || remoteGameImage(game);
+  return game[5] || cachedGameImage(game[0])?.thumbnailUrl || remoteGameImage(game);
+}
+
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[character]);
+}
+
+function safeCommonsUrl(value, hosts) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && hosts.includes(url.hostname) ? url.href : '';
+  } catch {
+    return '';
+  }
+}
+
+function imageCreditMarkup(name) {
+  const result = cachedGameImage(name);
+  if (!result || !result.descriptionUrl) return '';
+  const credit = result.artist || 'Wikimedia Commons';
+  const license = result.license ? ` · ${result.license}` : '';
+  return `<a class="photo-credit" href="${escapeHtml(result.descriptionUrl)}" target="_blank" rel="noreferrer">画像: ${escapeHtml(credit)}${escapeHtml(license)}</a>`;
+}
+
+function plainTextFromHtml(value) {
+  const documentFragment = new DOMParser().parseFromString(String(value || ''), 'text/html');
+  return documentFragment.body.textContent.trim();
+}
+
+async function searchCommonsImage(name) {
+  const queries = [`${name} board game`, `${name} ボードゲーム`];
+  for (const query of queries) {
+    const params = new URLSearchParams({
+      action: 'query',
+      generator: 'search',
+      gsrsearch: query,
+      gsrnamespace: '6',
+      gsrlimit: '10',
+      prop: 'imageinfo',
+      iiprop: 'url|extmetadata',
+      iiurlwidth: '960',
+      format: 'json',
+      origin: '*'
+    });
+    const response = await fetch(`https://commons.wikimedia.org/w/api.php?${params}`);
+    if (!response.ok) throw new Error(`Wikimedia Commons returned ${response.status}`);
+    const data = await response.json();
+    const pages = Object.values(data.query?.pages || {}).sort((first, second) => first.index - second.index);
+    for (const page of pages) {
+      const image = page.imageinfo?.[0];
+      const thumbnailUrl = safeCommonsUrl(image?.thumburl, ['upload.wikimedia.org', 'thumb.wikimedia.org'])
+        || safeCommonsUrl(image?.url, ['upload.wikimedia.org']);
+      const descriptionUrl = safeCommonsUrl(image?.descriptionurl, ['commons.wikimedia.org']);
+      if (!thumbnailUrl || !descriptionUrl) continue;
+      return {
+        thumbnailUrl,
+        descriptionUrl,
+        artist: plainTextFromHtml(image.extmetadata?.Artist?.value) || page.title,
+        license: plainTextFromHtml(image.extmetadata?.LicenseShortName?.value)
+      };
+    }
+  }
+  return null;
+}
+
+const imageSearchRequests = new Map();
+
+async function loadGameImage(name) {
+  const key = imageCacheKey(name);
+  if (!key) return null;
+  const cached = imageSearchCache[key];
+  const cacheAge = cached ? Date.now() - Number(cached.searchedAt) : Infinity;
+  if (cached && Number.isFinite(cacheAge)
+    && cacheAge < (cached.failed ? 5 * 60 * 1000 : 90 * 24 * 60 * 60 * 1000)) {
+    return cachedGameImage(name);
+  }
+  if (imageSearchRequests.has(key)) return imageSearchRequests.get(key);
+  const request = searchCommonsImage(name)
+    .then((result) => {
+      imageSearchCache[key] = { searchedAt: Date.now(), result, failed: false };
+      localStorage.setItem('boardGameImageSearch', JSON.stringify(imageSearchCache));
+      return result;
+    })
+    .catch((error) => {
+      console.error(`画像検索に失敗しました: ${name}`, error);
+      imageSearchCache[key] = { searchedAt: Date.now(), result: null, failed: true };
+      localStorage.setItem('boardGameImageSearch', JSON.stringify(imageSearchCache));
+      return null;
+    })
+    .finally(() => imageSearchRequests.delete(key));
+  imageSearchRequests.set(key, request);
+  return request;
+}
+
+function applyImageCredit(image, name) {
+  const previousCredit = image.nextElementSibling;
+  if (previousCredit?.classList.contains('photo-credit')) previousCredit.remove();
+  const result = cachedGameImage(name);
+  if (!result || !result.descriptionUrl) return;
+  const credit = document.createElement('a');
+  credit.className = 'photo-credit';
+  credit.href = result.descriptionUrl;
+  credit.target = '_blank';
+  credit.rel = 'noreferrer';
+  credit.textContent = `画像: ${result.artist || 'Wikimedia Commons'}${result.license ? ` · ${result.license}` : ''}`;
+  image.after(credit);
+}
+
+const imageSearchObserver = new IntersectionObserver((entries, observer) => {
+  entries.forEach((entry) => {
+    if (!entry.isIntersecting) return;
+    observer.unobserve(entry.target);
+    const image = entry.target;
+    const name = image.dataset.imageSearch;
+    if (!name || games.some((game) => game[0] === name && game[5])) return;
+    loadGameImage(name).then((result) => {
+      if (!result) return;
+      document.querySelectorAll('[data-image-search]').forEach((currentImage) => {
+        if (currentImage.dataset.imageSearch !== name || games.some((game) => game[0] === name && game[5])) return;
+        currentImage.src = result.thumbnailUrl;
+        applyImageCredit(currentImage, name);
+      });
+    });
+  });
+});
+
+function observeGameImages() {
+  document.querySelectorAll('[data-image-search]').forEach((image) => {
+    const name = image.dataset.imageSearch;
+    if (!name || games.some((game) => game[0] === name && game[5])) return;
+    const result = cachedGameImage(name);
+    if (result) {
+      image.src = result.thumbnailUrl;
+      applyImageCredit(image, name);
+    } else {
+      imageSearchObserver.observe(image);
+    }
+  });
 }
 
 function playerMatches(range, filter) {
@@ -175,7 +330,8 @@ function render() {
   if (activeSort === 'name') {
     result.sort(({ game: first }, { game: second }) => toKatakana(gameReading(first) || first[0]).localeCompare(toKatakana(gameReading(second) || second[0]), 'ja', { numeric: true, sensitivity: 'base' }));
   }
-  grid.innerHTML = result.map(({ game, index }) => `<article class="game-card" style="animation-delay:${Math.min(index * .025, .35)}s"><div><img class="card-photo" src="${gameImage(game)}" alt="${game[0]}のプレイ時の盤面写真" loading="lazy" onerror="this.onerror=null;this.src='https://tse1.mm.bing.net/th?q=board+game+play&w=960&h=640&c=7&rs=1&p=0'" /><div class="card-top"><span class="genre">${(game[2] || 'その他').toUpperCase()}</span><span class="player-badge">${game[1]}</span></div>${gameReading(game) ? `<p class="game-reading">${gameReading(game)}</p>` : ''}<h3>${game[0]}</h3><p class="game-duration">${gameDuration(game)}</p><p>${game[3]}</p></div><div class="card-bottom"><button class="detail-link" data-detail="${index}" type="button">メモを見る →</button><button class="edit-link" data-edit="${index}" type="button">編集</button><button class="remove-link" data-remove="${index}" type="button">削除</button></div></article>`).join('');
+  grid.innerHTML = result.map(({ game, index }) => `<article class="game-card" style="animation-delay:${Math.min(index * .025, .35)}s"><div><img class="card-photo" data-image-search="${escapeHtml(game[0])}" src="${gameImage(game)}" alt="${escapeHtml(game[0])}のプレイ時の盤面写真" loading="lazy" onerror="this.onerror=null;this.src='https://tse1.mm.bing.net/th?q=board+game+play&w=960&h=640&c=7&rs=1&p=0'" />${imageCreditMarkup(game[0])}<div class="card-top"><span class="genre">${(game[2] || 'その他').toUpperCase()}</span><span class="player-badge">${game[1]}</span></div>${gameReading(game) ? `<p class="game-reading">${gameReading(game)}</p>` : ''}<h3>${game[0]}</h3><p class="game-duration">${gameDuration(game)}</p><p>${game[3]}</p></div><div class="card-bottom"><button class="detail-link" data-detail="${index}" type="button">メモを見る →</button><button class="edit-link" data-edit="${index}" type="button">編集</button><button class="remove-link" data-remove="${index}" type="button">削除</button></div></article>`).join('');
+  observeGameImages();
   grid.dataset.columns = activeColumns;
   resultCount.textContent = `${result.length} TITLES`;
   emptyState.hidden = result.length > 0;
@@ -313,7 +469,9 @@ grid.addEventListener('click', (event) => {
     const detailPhoto = document.querySelector('#detailPhoto');
     const detailPhotoWrap = document.querySelector('#detailPhotoWrap');
     detailPhotoWrap.hidden = false;
+    detailPhoto.dataset.imageSearch = game[0];
     detailPhoto.src = gameImage(game);
+    applyImageCredit(detailPhoto, game[0]);
     detailPhoto.onerror = () => { detailPhoto.onerror = null; detailPhoto.src = 'https://tse1.mm.bing.net/th?q=board+game+play&w=960&h=640&c=7&rs=1&p=0'; };
     document.querySelector('#detailTitle').textContent = game[0];
     document.querySelector('#detailGenre').textContent = (game[2] || 'その他').toUpperCase();
