@@ -25,6 +25,12 @@
     font-size: clamp(23px, 7vw, 30px);
   }
 
+  .modal input,
+  .modal textarea,
+  .modal select {
+    font-size: 16px;
+  }
+
   .form-actions .submit-button {
     display: flex;
     align-items: center;

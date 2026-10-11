@@ -277,6 +277,9 @@ document.querySelector('#gameForm').addEventListener('submit', async (event) => 
     showToast('同じ名前のゲームがあります');
     return;
   }
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur();
+  }
   const imageFile = data.get('image');
   const image = imageFile?.size ? await readImage(imageFile) : editingIndex !== null ? games[editingIndex][5] || '' : '';
   const item = [name, `${data.get('min')}–${data.get('max')}人`, data.get('genre'), data.get('description'), data.get('rules'), image, String(data.get('reading') || '').trim(), String(data.get('duration') || '').trim()];
