@@ -1,4 +1,4 @@
-const CACHE_NAME = 'board-game-shelf-v4';
+const CACHE_NAME = 'board-game-shelf-v5';
 const APP_FILES = ['./', './index.html', './styles.css', './mobile.css?v=4', './app.js', './manifest.json'];
 
 self.addEventListener('install', (event) => {
@@ -19,6 +19,21 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-cache' })
+        .then((response) => {
+          if (!response.ok) return response;
+          return caches.open(CACHE_NAME)
+            .then((cache) => cache.put(event.request, response.clone()))
+            .then(() => response);
+        })
+        .catch(() => caches.open(CACHE_NAME)
+          .then((cache) => cache.match(event.request)))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.open(CACHE_NAME)
       .then((cache) => cache.match(event.request))
