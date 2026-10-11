@@ -1,4 +1,4 @@
-const CACHE_NAME = 'board-game-shelf-v2';
+const CACHE_NAME = 'board-game-shelf-v3';
 const APP_FILES = ['./', './index.html', './styles.css', './mobile.css', './app.js', './manifest.json'];
 
 self.addEventListener('install', (event) => {
@@ -7,9 +7,21 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys()
+      .then((cacheNames) => Promise.all(
+        cacheNames
+          .filter((cacheName) => cacheName.startsWith('board-game-shelf-') && cacheName !== CACHE_NAME)
+          .map((cacheName) => caches.delete(cacheName))
+      ))
+      .then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener('fetch', (event) => {
-  event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
+  event.respondWith(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.match(event.request))
+      .then((cached) => cached || fetch(event.request))
+  );
 });

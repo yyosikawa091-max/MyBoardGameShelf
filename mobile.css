@@ -1,19 +1,20 @@
 @media (max-width: 600px) {
   .modal-backdrop {
-    padding: max(12px, env(safe-area-inset-top)) 12px
-      max(12px, env(safe-area-inset-bottom));
+    padding: 0;
+    place-items: stretch;
   }
 
   .modal {
     width: 100%;
-    max-height: calc(100vh - 24px);
-    max-height: calc(
-      100dvh - max(24px, env(safe-area-inset-top) + env(safe-area-inset-bottom))
-    );
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
-    padding: 24px 20px;
+    padding: calc(24px + env(safe-area-inset-top)) 20px
+      calc(24px + env(safe-area-inset-bottom));
+    box-shadow: none;
   }
 
   .modal h2 {
