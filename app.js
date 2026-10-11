@@ -224,6 +224,18 @@ document.querySelector('#confirmDelete').addEventListener('click', () => {
 
 const backdrop = document.querySelector('#modalBackdrop');
 const detailBackdrop = document.querySelector('#detailBackdrop');
+const updateVisibleViewport = () => {
+  const viewport = window.visualViewport;
+  if (!viewport) return;
+  const rootStyle = document.documentElement.style;
+  rootStyle.setProperty('--visible-viewport-width', `${viewport.width}px`);
+  rootStyle.setProperty('--visible-viewport-height', `${viewport.height}px`);
+  rootStyle.setProperty('--visible-viewport-offset-left', `${viewport.offsetLeft}px`);
+  rootStyle.setProperty('--visible-viewport-offset-top', `${viewport.offsetTop}px`);
+};
+updateVisibleViewport();
+window.visualViewport?.addEventListener('resize', updateVisibleViewport);
+window.visualViewport?.addEventListener('scroll', updateVisibleViewport);
 const openModal = () => {
   editingIndex = null;
   document.querySelector('#modalEyebrow').textContent = 'NEW ENTRY';
@@ -232,7 +244,9 @@ const openModal = () => {
   document.querySelector('#deleteFromEdit').hidden = true;
   document.querySelector('#gameForm').reset();
   backdrop.hidden = false;
-  document.querySelector('[name="name"]').focus();
+  if (!window.matchMedia('(max-width: 600px)').matches) {
+    document.querySelector('[name="name"]').focus();
+  }
 };
 document.querySelectorAll('#openAddTop,#openAddBottom').forEach((button) => button.addEventListener('click', openModal));
 document.querySelector('#closeModal').addEventListener('click', () => { backdrop.hidden = true; });
@@ -326,7 +340,9 @@ grid.addEventListener('click', (event) => {
     }
     form.elements.genre.value = game[2] || 'その他';
     backdrop.hidden = false;
-    form.elements.name.focus();
+    if (!window.matchMedia('(max-width: 600px)').matches) {
+      form.elements.name.focus();
+    }
   }
   if (remove) {
     const index = Number(remove.dataset.remove);
