@@ -234,6 +234,7 @@ const updateVisibleViewport = () => {
   rootStyle.setProperty('--visible-viewport-offset-top', `${viewport.offsetTop}px`);
 };
 updateVisibleViewport();
+window.addEventListener('resize', updateVisibleViewport);
 window.visualViewport?.addEventListener('resize', updateVisibleViewport);
 window.visualViewport?.addEventListener('scroll', updateVisibleViewport);
 const openModal = () => {

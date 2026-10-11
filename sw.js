@@ -1,5 +1,5 @@
-const CACHE_NAME = 'board-game-shelf-v7';
-const APP_FILES = ['./', './index.html', './styles.css', './mobile.css?v=7', './app.js', './manifest.json'];
+const CACHE_NAME = 'board-game-shelf-v8';
+const APP_FILES = ['./', './index.html', './styles.css', './mobile.css?v=8', './app.js?v=8', './manifest.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_FILES)));
