@@ -24,4 +24,14 @@
   .modal h2 {
     font-size: clamp(23px, 7vw, 30px);
   }
+
+  .form-actions .submit-button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .form-actions .submit-button span {
+    float: none;
+  }
 }
