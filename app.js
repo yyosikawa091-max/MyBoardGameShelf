@@ -188,7 +188,8 @@ function safeCommonsUrl(value, hosts) {
   }
 }
 
-function imageCreditMarkup(name) {
+function imageCreditMarkup(name, hasCustomImage) {
+  if (hasCustomImage) return '';
   const result = cachedGameImage(name);
   if (!result || !result.descriptionUrl) return '';
   const credit = result.artist || 'Wikimedia Commons';
@@ -330,7 +331,7 @@ function render() {
   if (activeSort === 'name') {
     result.sort(({ game: first }, { game: second }) => toKatakana(gameReading(first) || first[0]).localeCompare(toKatakana(gameReading(second) || second[0]), 'ja', { numeric: true, sensitivity: 'base' }));
   }
-  grid.innerHTML = result.map(({ game, index }) => `<article class="game-card" style="animation-delay:${Math.min(index * .025, .35)}s"><div><img class="card-photo" data-image-search="${escapeHtml(game[0])}" src="${gameImage(game)}" alt="${escapeHtml(game[0])}のプレイ時の盤面写真" loading="lazy" onerror="this.onerror=null;this.src='https://tse1.mm.bing.net/th?q=board+game+play&w=960&h=640&c=7&rs=1&p=0'" />${imageCreditMarkup(game[0])}<div class="card-top"><span class="genre">${(game[2] || 'その他').toUpperCase()}</span><span class="player-badge">${game[1]}</span></div>${gameReading(game) ? `<p class="game-reading">${gameReading(game)}</p>` : ''}<h3>${game[0]}</h3><p class="game-duration">${gameDuration(game)}</p><p>${game[3]}</p></div><div class="card-bottom"><button class="detail-link" data-detail="${index}" type="button">メモを見る →</button><button class="edit-link" data-edit="${index}" type="button">編集</button><button class="remove-link" data-remove="${index}" type="button">削除</button></div></article>`).join('');
+  grid.innerHTML = result.map(({ game, index }) => `<article class="game-card" style="animation-delay:${Math.min(index * .025, .35)}s"><div><img class="card-photo" data-image-search="${escapeHtml(game[0])}" src="${gameImage(game)}" alt="${escapeHtml(game[0])}のプレイ時の盤面写真" loading="lazy" onerror="this.onerror=null;this.src='https://tse1.mm.bing.net/th?q=board+game+play&w=960&h=640&c=7&rs=1&p=0'" />${imageCreditMarkup(game[0], Boolean(game[5]))}<div class="card-top"><span class="genre">${(game[2] || 'その他').toUpperCase()}</span><span class="player-badge">${game[1]}</span></div>${gameReading(game) ? `<p class="game-reading">${gameReading(game)}</p>` : ''}<h3>${game[0]}</h3><p class="game-duration">${gameDuration(game)}</p><p>${game[3]}</p></div><div class="card-bottom"><button class="detail-link" data-detail="${index}" type="button">メモを見る →</button><button class="edit-link" data-edit="${index}" type="button">編集</button><button class="remove-link" data-remove="${index}" type="button">削除</button></div></article>`).join('');
   observeGameImages();
   grid.dataset.columns = activeColumns;
   resultCount.textContent = `${result.length} TITLES`;
@@ -471,7 +472,17 @@ grid.addEventListener('click', (event) => {
     detailPhotoWrap.hidden = false;
     detailPhoto.dataset.imageSearch = game[0];
     detailPhoto.src = gameImage(game);
-    applyImageCredit(detailPhoto, game[0]);
+    if (game[5]) {
+      const credit = detailPhoto.nextElementSibling;
+      if (credit?.classList.contains('photo-credit')) credit.remove();
+    } else {
+      applyImageCredit(detailPhoto, game[0]);
+      loadGameImage(game[0]).then((result) => {
+        if (!result || detailPhoto.dataset.imageSearch !== game[0] || game[5]) return;
+        detailPhoto.src = result.thumbnailUrl;
+        applyImageCredit(detailPhoto, game[0]);
+      });
+    }
     detailPhoto.onerror = () => { detailPhoto.onerror = null; detailPhoto.src = 'https://tse1.mm.bing.net/th?q=board+game+play&w=960&h=640&c=7&rs=1&p=0'; };
     document.querySelector('#detailTitle').textContent = game[0];
     document.querySelector('#detailGenre').textContent = (game[2] || 'その他').toUpperCase();
